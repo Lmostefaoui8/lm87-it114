@@ -1,0 +1,6 @@
+{
+    "terminal.integrated.defaultProfile.windows": "PowerShell",
+    "terminal.integrated.env.windows": {
+      "PATH": "C:\\Program Files\\Eclipse Adoptium\\jdk-17\\bin;${env:PATH}"
+    }
+  }
