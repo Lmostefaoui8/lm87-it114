@@ -1,5 +1,9 @@
 package Common;
 
+// UCID: lm87 | Date: 2025-08-09
+// Summary: Types of messages exchanged between client & server (added POINTS_SYNC for MS2).
+
+
 public enum PayloadType {
     CLIENT_CONNECT, // client requesting to connect to server (passing of initialization data
                     // [name])
@@ -10,5 +14,8 @@ public enum PayloadType {
     ROOM_JOIN,
     ROOM_LEAVE,
     REVERSE,
-    MESSAGE // sender and message
+    MESSAGE ,// sender and message
+    PICK,
+    POINTS_SYNC, // added this for scoreboard syncs3
+    START
 }
