@@ -3,14 +3,14 @@ package Server;
 import Common.*;
 import Common.TextFX.Color;
 
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import Exceptions.*;
 
 public class Room implements AutoCloseable {
     private final String name;// unique name of the Room
     private volatile boolean isRunning = false;
-    private final ConcurrentHashMap<Long, ServerThread> clientsInRoom = new ConcurrentHashMap<Long, ServerThread>();
-
+    Map<Long, ServerThread> clientsInRoom = new ConcurrentHashMap<>();
     public final static String LOBBY = "lobby";
 
     private void info(String message) {
@@ -42,6 +42,8 @@ public class Room implements AutoCloseable {
         // notify clients of someone joining
         joinStatusRelay(client, true);
 
+        onClientAdded(client);
+
     }
 
     protected synchronized void removeClient(ServerThread client) {
@@ -58,6 +60,7 @@ public class Room implements AutoCloseable {
             joinStatusRelay(removedClient, false);
             clientsInRoom.remove(client.getClientId());
             autoCleanup();
+            onClientRemoved(client);
         }
     }
 
@@ -96,6 +99,26 @@ public class Room implements AutoCloseable {
             return failedToSend;
         });
     }
+
+    // UCID: lm87 | Date: 2025-08-10
+// Brief: Base lifecycle hooks for rooms; GameRoom overrides these to run game-specific logic.
+protected void onClientAdded(ServerThread st) {
+    // default: no-op
+}
+
+protected void onClientRemoved(ServerThread st) {
+    // default: no-op
+}
+
+// UCID: lm87 | Date: 2025-08-10
+// Brief: Expose read-only snapshots of room clients to subclasses like GameRoom.
+protected java.util.Set<Long> getClientIds() {
+    return java.util.Collections.unmodifiableSet(clientsInRoom.keySet());
+}
+
+protected java.util.Map<Long, ServerThread> getClientsSnapshot() {
+    return java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(clientsInRoom));
+}
 
     /**
      * Sends a basic String message from the sender to all connectedClients
@@ -143,6 +166,12 @@ public class Room implements AutoCloseable {
             return failedToSend;
         });
     }
+
+        // UCID: lm87 | Date: 2025-08-10
+        // Brief: Default no-op hook; GameRoom overrides to implement RPS picking.
+        protected synchronized void handlePick(ServerThread sender, String rawChoice) {
+            // no-op in base
+        }
 
     /**
      * Takes a ServerThread and removes them from the Server
@@ -263,10 +292,14 @@ public class Room implements AutoCloseable {
     }
 
     // UCID: LM87 | 2025-08-09
-// Summary: Prefix with sender name and relay to everyone in this room.
+    // Summary: Prefix with sender name and relay to everyone in this room.
 
     protected synchronized void handleMessage(ServerThread sender, String text) {
         relay(sender, text);
     }
+
+
+
+
     // end handle methods
 }

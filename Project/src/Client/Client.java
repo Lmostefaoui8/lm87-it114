@@ -114,13 +114,30 @@ public enum Client {
      * @throws IOException
      */
 
-     // UCID: <your UCID> | Date: 2025-08-09
+     // UCID: LM87 | Date: 2025-08-09
 // Summary: Parse /createroom and /joinroom; build and send the right payload.
     private boolean processClientCommand(String text) throws IOException {
         boolean wasCommand = false;
 
 
-       
+            // Only treat lines that begin with slash OR known keywords as commands
+            boolean looksLikeCommand = text.startsWith(Constants.COMMAND_TRIGGER)
+            || text.startsWith("connect ")
+            || text.startsWith("name ")
+            || text.equalsIgnoreCase("listusers")
+            || text.equalsIgnoreCase("quit")
+            || text.equalsIgnoreCase("disconnect")
+            || text.startsWith("reverse ")
+            || text.startsWith("createroom ")
+            || text.startsWith("joinroom ")
+            || text.startsWith("leave")
+            || text.startsWith("pick")
+            || text.equalsIgnoreCase("start");
+
+        if (!looksLikeCommand) {
+        return false; // let sendMessage(...) handle normal chat
+        }
+
         if (text.startsWith(Constants.COMMAND_TRIGGER)) {
             text = text.substring(1); // remove the /
             // System.out.println("Checking command: " + text);
@@ -197,6 +214,45 @@ public enum Client {
                 sendRoomAction(text, RoomAction.LEAVE);
                 wasCommand = true;
             }
+
+                    // UCID: lm87 | Date: 2025-08-10
+            // Summary: Handle /pick <r|p|s>; validate and send as a PICK payload.
+            else if (text.startsWith("pick")) {
+                String arg = text.replaceFirst("^pick\\s*", "").trim().toLowerCase();
+                if (!(arg.equals("r") || arg.equals("p") || arg.equals("s"))) {
+                    System.out.println("Usage: pick <r|p|s>");
+                    return true;
+                }
+                Payload p = new Payload();
+                p.setPayloadType(PayloadType.PICK);
+              
+                p.setClientId(myUser.getClientId());
+                p.setMessage(arg); // r/p/s
+
+                System.out.println("[DEBUG] sending PICK payload -> " + arg +
+                                   " (clientId=" + myUser.getClientId() + ")");
+           
+                sendToServer(p);
+
+                System.out.println(TextFX.colorize("You picked [" + arg + "]", TextFX.Color.CYAN));
+                return true;
+            }
+
+            // UCID: lm87 | 2025-08-10
+        // Brief: Start a game session in the current room.
+
+            else if (text.equalsIgnoreCase("start")) {
+                Payload p = new Payload();
+                p.setPayloadType(PayloadType.START);   // see next step
+                p.setClientId(myUser.getClientId());
+
+                System.out.println("[DEBUG] sending PICK payload -> " + text + " (clientId=" + myUser.getClientId() + ")");
+
+               
+                sendToServer(p);
+                System.out.println("Requested session start.");
+                return true;
+            }
         }
         return wasCommand;
     }
@@ -226,6 +282,7 @@ public enum Client {
             case LEAVE:
                 payload.setPayloadType(PayloadType.ROOM_LEAVE);
                 break;
+                
             default:
                 System.out.println(TextFX.colorize("Invalid room action", Color.RED));
                 break;
@@ -368,6 +425,10 @@ public enum Client {
             case SYNC_CLIENT:
                 processRoomAction(payload);
                 break;
+                // UCID: lm87 | Date: 2025-08-10
+            case POINTS_SYNC:
+            processPointsSync(payload);
+            break;
             default:
                 System.out.println(TextFX.colorize("Unhandled payload type", Color.YELLOW));
                 break;
@@ -386,6 +447,17 @@ public enum Client {
         knownClients.put(myUser.getClientId(), myUser);
         System.out.println(TextFX.colorize("Connected", Color.GREEN));
     }
+
+        // UCID: lm87 | Date: 2025-08-10
+    // Brief: Show scoreboard sync pushed by the server.
+    private void processPointsSync(Payload payload) {
+        if (payload instanceof PointsPayload) {
+            PointsPayload pp = (PointsPayload) payload;
+            System.out.println(TextFX.colorize("[POINTS_SYNC] " + pp.getPointsByClientId(), Color.CYAN));
+        } else {
+            System.out.println(TextFX.colorize("[POINTS_SYNC] " + payload, Color.CYAN));
+        }
+}
 
     private void processDisconnect(Payload payload) {
         if (payload.getClientId() == myUser.getClientId()) {
@@ -463,10 +535,19 @@ public enum Client {
     private void listenToInput() {
         try (Scanner si = new Scanner(System.in)) {
             System.out.println("Waiting for input"); // moved here to avoid console spam
-            while (isRunning) { // Run until isRunning is false
+            while (isRunning && si.hasNextLine()) { // Run until isRunning is false
+
+                
                 String userInput = si.nextLine();
                 if (!processClientCommand(userInput)) {
-                    sendMessage(userInput);
+
+                    if (userInput.startsWith(Constants.COMMAND_TRIGGER)) {
+                        System.out.println("Unknown command: " + userInput);
+                    }
+                    else{
+                        sendMessage(userInput);
+
+                    }
                 }
             }
         } catch (IOException ioException) {

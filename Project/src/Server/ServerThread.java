@@ -126,6 +126,31 @@ public class ServerThread extends BaseServerThread {
         return sendToClient(payload);
     }
 
+        // UCID: lm87 | Date: 2025-08-10
+    // Brief: Convenience wrapper so other classes (e.g., GameRoom) can send any payload via ServerThread.
+    public boolean sendPayload(Common.Payload payload) {
+        // BaseServerThread has the actual socket writer
+        return sendToClient(payload);
+    }
+
+        // UCID: lm87 | Date: 2025-08-10
+    // Brief: Overload to send a plain server message without specifying a sender id.
+    public boolean sendMessage(String message) {
+        // DEFAULT_CLIENT_ID means “server/system” in this codebase
+        return sendMessage(Common.Constants.DEFAULT_CLIENT_ID, message);
+    }
+
+        // UCID: lm87 | Date: 2025-08-10
+    // Brief: Sync a full scoreboard to this client using PointsPayload (Milestone 2).
+    public boolean sendPoints(java.util.Map<Long, Integer> pointsByClientId, String reason) {
+        Common.PointsPayload pp = new Common.PointsPayload();
+        pp.setPayloadType(Common.PayloadType.POINTS_SYNC);
+        pp.setClientId(getClientId());  // not required for all uses, but fine to include
+        pp.setMessage(reason);
+        pp.setPointsByClientId(pointsByClientId);
+        return sendToClient(pp);
+    }
+
     // End Send*() Methods
     @Override
     protected void processPayload(Payload incoming) {
@@ -153,6 +178,24 @@ public class ServerThread extends BaseServerThread {
             case ROOM_LEAVE:
                 currentRoom.handleJoinRoom(this, Room.LOBBY);
                 break;
+
+                // UCID: lm87 | Date: 2025-08-10
+    // Brief: Route PICK to the room so GameRoom can record the choice.
+                case PICK:
+                System.out.println("Thread[" + getId() + "] PICK <- " + getClientName()
+                + " choice=" + incoming.getMessage());
+                currentRoom.handlePick(this, incoming.getMessage()); // "r","p","s"
+                break;
+
+                case START:
+                if (currentRoom instanceof GameRoom) {
+                    System.out.println("Thread[" + getId() + "]: START requested by " + getClientName());
+                    ((GameRoom) currentRoom).onSessionStart();  // make this method public if needed
+                } else {
+                    sendMessage("This command only works in a GameRoom.");
+                }
+                break;
+
             default:
                 System.out.println(TextFX.colorize("Unknown payload type received", Color.RED));
                 break;

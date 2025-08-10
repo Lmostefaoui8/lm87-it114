@@ -1,56 +1,29 @@
+// UCID: lm87 | Date: 2025-08-10
+// Brief: Base payload for client/server messages. Carries type, client id, and message text.
 package Common;
 
 import java.io.Serializable;
 
 public class Payload implements Serializable {
+    private static final long serialVersionUID = 1L;
+
     private PayloadType payloadType;
     private long clientId;
     private String message;
 
-    /**
-     * @return the payloadType
-     */
-    public PayloadType getPayloadType() {
-        return payloadType;
-    }
+    public PayloadType getPayloadType() { return payloadType; }
+    public void setPayloadType(PayloadType payloadType) { this.payloadType = payloadType; }
 
-    /**
-     * @param payloadType the payloadType to set
-     */
-    public void setPayloadType(PayloadType payloadType) {
-        this.payloadType = payloadType;
-    }
+    public long getClientId() { return clientId; }
+    public void setClientId(long clientId) { this.clientId = clientId; }
 
-    /**
-     * @return the clientId
-     */
-    public long getClientId() {
-        return clientId;
-    }
-
-    /**
-     * @param clientId the clientId to set
-     */
-    public void setClientId(long clientId) {
-        this.clientId = clientId;
-    }
-
-    /**
-     * @return the message
-     */
-    public String getMessage() {
-        return message;
-    }
-
-    /**
-     * @param message the message to set
-     */
-    public void setMessage(String message) {
-        this.message = message;
-    }
+    public String getMessage() { return message; }
+    public void setMessage(String message) { this.message = message; }
 
     @Override
     public String toString() {
-        return String.format("Payload[%s] Client Id [%s] Message: [%s]", getPayloadType(), getClientId(), getMessage());
+        // Matches the lesson-style debug
+        return String.format("Payload[%s] Client Id [%s] Message: [%s]",
+                getPayloadType(), getClientId(), getMessage());
     }
 }
