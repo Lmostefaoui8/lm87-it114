@@ -101,6 +101,7 @@ public enum Server {
         info(String.format("*%s initialized*", serverThread.getDisplayName()));
         try {
             joinRoom(Room.LOBBY, serverThread);
+            sendRoomsListTo(serverThread);
             info(String.format("*%s added to Lobby*", serverThread.getDisplayName()));
         } catch (RoomNotFoundException e) {
             info(String.format("*Error adding %s to Lobby*", serverThread.getDisplayName()));
@@ -126,6 +127,7 @@ public enum Server {
         // after: lobby stays Room; everything else becomes GameRoom
         Room room = Room.LOBBY.equalsIgnoreCase(name) ? new Room(name) : new GameRoom(name);
         rooms.put(nameCheck, room);
+        broadcastRoomsListToLobby();
         info(String.format("Created new Room %s", name));
     }
 
@@ -160,7 +162,37 @@ public enum Server {
 // Summary: Deletes a room from the rooms map.
     protected void removeRoom(Room room) {
         rooms.remove(room.getName().toLowerCase());
+        broadcastRoomsListToLobby();
         info(String.format("Removed room %s", room.getName()));
+    }
+
+        // UCID: lm87 | 2025-08-11
+    // Brief: Build current room list (excluding Lobby) and send to a specific client.
+    protected void sendRoomsListTo(ServerThread st) {
+        Common.RoomsPayload rp = new Common.RoomsPayload();
+        rp.setPayloadType(Common.PayloadType.ROOMS_SYNC);
+        java.util.List<String> list = new java.util.ArrayList<>();
+        rooms.forEach((name, r) -> { if (!Room.LOBBY.equalsIgnoreCase(name)) list.add(r.getName()); });
+        java.util.Collections.sort(list, String.CASE_INSENSITIVE_ORDER);
+        rp.setRooms(list);
+        st.send(rp);
+    }
+
+        // UCID: lm87 | 2025-08-11
+    // Brief: Broadcast current room list to everyone in the Lobby.
+    protected void broadcastRoomsListToLobby() {
+        Room lobby = rooms.get(Room.LOBBY.toLowerCase());
+        if (lobby == null) return;
+        Common.RoomsPayload rp = new Common.RoomsPayload();
+        rp.setPayloadType(Common.PayloadType.ROOMS_SYNC);
+        java.util.List<String> list = new java.util.ArrayList<>();
+        rooms.forEach((name, r) -> { if (!Room.LOBBY.equalsIgnoreCase(name)) list.add(r.getName()); });
+        java.util.Collections.sort(list, String.CASE_INSENSITIVE_ORDER);
+        rp.setRooms(list);
+        // send to everyone in Lobby
+        for (ServerThread st : lobby.getClientsSnapshot().values()) {
+            st.send(rp);
+        }
     }
 
     /**

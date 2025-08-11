@@ -195,12 +195,62 @@ public class ServerThread extends BaseServerThread {
                     sendMessage("This command only works in a GameRoom.");
                 }
                 break;
+                case GAME_SETTING: {
+                    // forward to the current room if it’s a GameRoom
+                    Room room = getCurrentRoom(); // or however you retrieve it
+                    if (room instanceof GameRoom) {
+                        ((GameRoom) room).applyGameSetting(this, incoming.getMessage());
+                    } else {
+                        sendMessage("Settings not supported in this room.");
+                    }
+                    break;
+                }
 
             default:
                 System.out.println(TextFX.colorize("Unknown payload type received", Color.RED));
                 break;
         }
     }
+
+    /**
+ * UCID: LM87 | Date: 2025-08-11
+ * Summary: Sends User List to refreshen the UI view. 
+ * 
+ */
+    public void sendUserList(java.util.Map<Long,Integer> points,
+    java.util.Map<Long,Boolean> eliminated,
+    java.util.Map<Long,Boolean> pending) {
+    // Back-compat: delegate to 4-arg overload
+    sendUserList(points, eliminated, pending, null,null);
+    }
+
+    public void sendUserList(java.util.Map<Long,Integer> points,
+    java.util.Map<Long,Boolean> eliminated,
+    java.util.Map<Long,Boolean> pending,
+    java.util.Map<Long,Boolean> away,
+    java.util.Map<Long,Boolean> spectators ) {
+
+    Common.UserListPayload up = new Common.UserListPayload();
+    up.setPayloadType(Common.PayloadType.USER_LIST);
+    up.setClientId(getClientId());
+    up.setPoints(points);
+    up.setEliminated(eliminated);
+    up.setPending(pending);
+    if (away != null) up.setAway(away);
+    if (spectators != null) up.setSpectators(spectators);
+    send(up);
+    }
+
+    public void send(Common.Payload payload) {
+        try {
+            out.writeObject(payload);
+            out.flush();
+        } catch (Exception e) {
+            System.err.println("send(payload) failed for " + getDisplayName() + ": " + e.getMessage());
+        }
+    }
+
+   
 
     @Override
     protected void onInitialized() {
