@@ -120,6 +120,8 @@ protected java.util.Map<Long, ServerThread> getClientsSnapshot() {
     return java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(clientsInRoom));
 }
 
+
+
     /**
      * Sends a basic String message from the sender to all connectedClients
      * Internally calls processCommand and evaluates as necessary.

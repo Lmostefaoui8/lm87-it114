@@ -17,5 +17,8 @@ public enum PayloadType {
     MESSAGE ,// sender and message
     PICK,
     POINTS_SYNC, // added this for scoreboard syncs3
-    START
+    START,
+    USER_LIST,
+    ROOMS_SYNC, 
+    GAME_SETTING
 }
