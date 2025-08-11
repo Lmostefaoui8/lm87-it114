@@ -52,6 +52,10 @@ public enum Client {
     private final java.util.concurrent.ConcurrentHashMap<Long, Boolean> eliminatedMap =
             new java.util.concurrent.ConcurrentHashMap<>();
 
+           private final java.util.concurrent.ConcurrentHashMap<Long, Boolean> spectatorMap =
+        new java.util.concurrent.ConcurrentHashMap<>();
+
+
 
     public synchronized java.util.Map<Long, Boolean> uiGetAwaySnapshot() {
         return new java.util.HashMap<>(awayMap);
@@ -110,6 +114,11 @@ public enum Client {
     // Expose events to UI
     public java.util.List<String> uiGetEventsSnapshot() {
         return new java.util.ArrayList<>(gameEvents);
+    }
+
+    
+    public boolean uiAmSpectator() {
+        return spectatorMap.getOrDefault(myUser.getClientId(), false);
     }
 
     // Am I eliminated right now?
@@ -187,8 +196,17 @@ public synchronized boolean uiExtraChoicesAllowed() {
     return remaining <= 3;
 }
 
+public boolean uiIsSpectator(long id) {
+    return spectatorMap.getOrDefault(id, false);
+}
+
     // Send a pick from UI (r|p|s or extras if allowed)
     public synchronized void uiPick(String choice) {
+
+        if (uiAmSpectator()){
+            return;
+        }
+
         if (choice == null) return;
         choice = choice.trim().toLowerCase();
 
@@ -670,11 +688,13 @@ public synchronized boolean uiExtraChoicesAllowed() {
             case USER_LIST: {
                 if (payload instanceof Common.UserListPayload) {
                     Common.UserListPayload up = (Common.UserListPayload) payload;
-                    if (up.getPoints() != null) { pointsMap.clear(); pointsMap.putAll(up.getPoints()); }
-                    if (up.getEliminated() != null) { eliminatedMap.clear(); eliminatedMap.putAll(up.getEliminated()); }
-                    if (up.getPending() != null) { pendingMap.clear(); pendingMap.putAll(up.getPending()); }
-                    // UI panels poll snapshots, so no extra call needed
-                    if (up.getAway() != null) { awayMap.clear(); awayMap.putAll(up.getAway()); }
+
+
+                   if (up.getPoints() != null)     { pointsMap.clear();     pointsMap.putAll(up.getPoints()); }
+if (up.getEliminated() != null) { eliminatedMap.clear(); eliminatedMap.putAll(up.getEliminated()); }
+if (up.getPending() != null)    { pendingMap.clear();    pendingMap.putAll(up.getPending()); }
+if (up.getAway() != null)       { awayMap.clear();       awayMap.putAll(up.getAway()); }
+if (up.getSpectators() != null) { spectatorMap.clear();  spectatorMap.putAll(up.getSpectators()); }
                 }
 
                 
@@ -852,6 +872,11 @@ public synchronized boolean uiExtraChoicesAllowed() {
                     return;
                 }
 
+                if (msg.startsWith("[SPECTATOR]")) {
+                    addEvent(msg.replaceFirst("\\[SPECTATOR\\]\\s*", "")); // pretty
+                    return; // don't echo as chat
+                }
+
             java.util.regex.Matcher m = java.util.regex.Pattern
                     .compile("\\[READY\\]\\s+(\\d+)\\s+(\\d)")
                     .matcher(msg);
@@ -909,6 +934,8 @@ public synchronized boolean uiExtraChoicesAllowed() {
             uiSelectedPick = null;
             return; // don't echo this as chat
         }
+
+        
 
         if(msg.startsWith("Round ") && msg.contains("ending")){
             uiLastRoundPick = uiSelectedPick;  

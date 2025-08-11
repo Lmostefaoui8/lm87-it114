@@ -29,6 +29,9 @@ public class GameRoom extends Room {
 
     // Scoreboard: clientId -> points
     private final Map<Long, Integer> points = new java.util.concurrent.ConcurrentHashMap<>();
+    private final java.util.concurrent.ConcurrentHashMap<Long, Boolean> ready = new java.util.concurrent.ConcurrentHashMap<>();
+    private final java.util.concurrent.ConcurrentHashMap<Long, Boolean> spectators = new java.util.concurrent.ConcurrentHashMap<>();
+
 
     // Optional timer handle (safe no-op usage if not wired yet)
     private ScheduledFuture<?> roundTimerFuture;
@@ -66,6 +69,18 @@ public class GameRoom extends Room {
             roundTimerFuture.cancel(false);
             roundTimerFuture = null;
         }
+    }
+
+    private boolean isSpectator(long id) {
+        return spectators.getOrDefault(id, false);
+    }
+
+    // Called by ServerThread/BaseServerThread when it detects a "[READY] <id> <0|1>" message
+    public synchronized void onReadyToggle(long id, boolean isReady) {
+        ready.put(id, isReady);
+        // If no session is running, nothing else to do.
+        // If a session *is* running: toggling ready doesn't convert a spectator mid-session.
+        // They’ll become a player next session start.
     }
 
     // Called when host updates settings
@@ -115,15 +130,29 @@ public class GameRoom extends Room {
     protected synchronized void onClientAdded(ServerThread st) {
         away.put(st.getClientId(), false);
         final long id = st.getClientId();
+
+        spectators.put(st.getClientId(), true); // force spectate
+        ready.putIfAbsent(st.getClientId(), false);
+
         points.putIfAbsent(id, 0);
-        boolean spectator = (phase != Phase.IDLE);
-        eliminated.put(id, spectator);
+
+        boolean spectatorNow = (phase != Phase.IDLE);
+        spectators.put(id, spectatorNow);  
+        eliminated.put(id, spectatorNow);
+
         picks.remove(id);
         st.sendPoints(snapshotBoard(), "[SYNC] Welcome to " + getName());
+
+
+        if (spectatorNow) {
+            broadcast(String.format("[SPECTATOR] %s joined as spectator.", st.getDisplayName()));
+        }
+
+
         broadcast(String.format("%s joined %s", st.getDisplayName(), getName()));
         syncUserList();
         System.out.println("[DEBUG] onClientAdded -> " + st.getDisplayName() + " id=" + id +
-                " spectator=" + spectator + " phase=" + phase);
+                " spectator=" + spectatorNow + " phase=" + phase);
     }
 
     // UCID: lm87 | Date: 2025-08-10
@@ -152,12 +181,33 @@ public class GameRoom extends Room {
     // Brief: Temp: allow /start to begin a session in GameRoom for MS2 testing.
     @Override
     protected synchronized void handleMessage(ServerThread sender, String text) {
+
+        if (tryHandleReady(sender, text)) {
+            // optionally return; if you don't want the control line echoed as chat
+             return;
+        }
         if (text != null && tryHandleExtraChoices(sender, text)) {
             return; // consumed; do NOT relay as chat
         }
+
+
+        java.util.regex.Matcher mReady = java.util.regex.Pattern
+        .compile("\\[READY\\]\\s+(\\d+)\\s+(\\d)")
+        .matcher(text);
+    if (mReady.find()) {
+        long id = Long.parseLong(mReady.group(1));
+        boolean isReady = "1".equals(mReady.group(2));
+        onReadyToggle(id, isReady);       // <— actually record it
+        // (Optionally) fall through to broadcast so other clients update too.
+    }
+
+
         if (tryHandleCooldown(sender, text))     return;
 
         if (tryHandleAway(sender, text)) return;
+
+
+
         // (optional) you can intercept /start or other game commands here too
         super.handleMessage(sender, text); // default relay from Room
     }
@@ -214,7 +264,7 @@ public class GameRoom extends Room {
         }
         for (ServerThread s : new java.util.ArrayList<>(clientsInRoom.values())) {
             s.sendUserList(snapshotPoints, snapshotElim, snapshotPending,
-                           new java.util.HashMap<>(away));
+                           new java.util.HashMap<>(away), new java.util.HashMap<>(spectators));
         }
     }
 
@@ -303,9 +353,24 @@ private boolean tryHandleExtraChoices(ServerThread sender, String raw) {
         phase = Phase.IDLE;
         picks.clear();
         eliminated.clear();
-        for (Long clientId : getClientIdsSafe()) {
-            eliminated.put(clientId, false);
-            picks.put(clientId, Choice.NONE);
+        spectators.clear();
+
+        for (Long id : getClientIdsSafe()) {
+            boolean isReady = ready.getOrDefault(id, false);
+            spectators.put(id, !isReady);
+        }
+
+        System.out.println("[DEBUG] ready at start=" + ready);
+        System.out.println("[DEBUG] spectators at start=" + spectators);
+
+        for (Long id : getClientIdsSafe()) {
+            if (isSpectator(id)) {
+                eliminated.put(id, true);      // <-- key line
+                picks.remove(id);
+            } else {
+                eliminated.put(id, false);
+                picks.put(id, Choice.NONE);
+            }
         }
 
         // === EXTRA CHOICES FEATURE (RPS-5) ===
@@ -313,6 +378,34 @@ private boolean tryHandleExtraChoices(ServerThread sender, String raw) {
         broadcast("[SETTINGS] EXTRA_CHOICES " + extraChoicesEnabled + " " + extraChoicesMode);
         broadcast("[SETTINGS] COOLDOWN " + cooldownEnabled); 
         onRoundStart();
+    }
+
+
+    private boolean tryHandleReady(ServerThread sender, String raw) {
+        if (raw == null) return false;
+    
+        String msg = raw;
+        int colon = msg.indexOf(':');          // handle "name: [READY] 2 1"
+        if (colon >= 0) msg = msg.substring(colon + 1).trim();
+    
+        if (msg.startsWith("[READY]")) msg = msg.substring(7).trim();
+        else if (msg.regionMatches(true, 0, "READY", 0, 5)) msg = msg.substring(5).trim();
+        else return false;
+    
+        String[] parts = msg.split("\\s+");
+        long id = sender.getClientId();
+        String flag;
+        if (parts.length >= 2) {
+            try { id = Long.parseLong(parts[0]); } catch (NumberFormatException ignored) {}
+            flag = parts[1];
+        } else if (parts.length == 1) {
+            flag = parts[0];
+        } else return false;
+    
+        boolean isReady = "1".equals(flag) || "true".equalsIgnoreCase(flag);
+        onReadyToggle(id, isReady);
+        System.out.println("[DEBUG] READY <- id=" + id + " ready=" + isReady);
+        return true;
     }
 
     // Helpers
@@ -579,6 +672,8 @@ private boolean tryHandleExtraChoices(ServerThread sender, String raw) {
             return;
         }
         final long id = sender.getClientId();
+
+        if (isSpectator(id)) return;
         if (eliminated.getOrDefault(id, false)) {
             sender.sendMessage("You're eliminated this session and are now a spectator.");
             return;
@@ -644,6 +739,9 @@ private boolean tryHandleExtraChoices(ServerThread sender, String raw) {
         java.util.Map<Long,Integer> snapshotPoints = new java.util.LinkedHashMap<>(points);
         java.util.Map<Long,Boolean> snapshotElim = new java.util.LinkedHashMap<>(eliminated);
         java.util.Map<Long,Boolean> snapshotPending = new java.util.LinkedHashMap<>();
+        java.util.Map<Long,Boolean> specSnap   = new java.util.LinkedHashMap<>(spectators);
+
+
         for (Long id : clientsInRoom.keySet()) {
             boolean elim = eliminated.getOrDefault(id, false);
             boolean pend = (phase == Phase.CHOOSING) && !elim &&
@@ -652,7 +750,7 @@ private boolean tryHandleExtraChoices(ServerThread sender, String raw) {
             snapshotPending.put(id, (!away.getOrDefault(id,false)) && pend);
         }
         for (ServerThread st : new java.util.ArrayList<>(clientsInRoom.values())) {
-            st.sendUserList(snapshotPoints, snapshotElim, snapshotPending, new java.util.HashMap<>(away));
+            st.sendUserList(snapshotPoints, snapshotElim, snapshotPending, new java.util.HashMap<>(away), specSnap);
         }
     }
 

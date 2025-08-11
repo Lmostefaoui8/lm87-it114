@@ -76,5 +76,11 @@ public class GameEventsPanel extends JPanel {
         if (model.size() > 0) {
             eventsList.ensureIndexIsVisible(model.size() - 1);
         }
+
+        boolean spec = Client.INSTANCE.uiAmSpectator();
+        cmd.setEnabled(!spec);   // whatever your field is named
+        
+
+
     }
 }

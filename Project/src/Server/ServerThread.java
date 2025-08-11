@@ -221,13 +221,15 @@ public class ServerThread extends BaseServerThread {
     java.util.Map<Long,Boolean> eliminated,
     java.util.Map<Long,Boolean> pending) {
     // Back-compat: delegate to 4-arg overload
-    sendUserList(points, eliminated, pending, null);
+    sendUserList(points, eliminated, pending, null,null);
     }
 
     public void sendUserList(java.util.Map<Long,Integer> points,
     java.util.Map<Long,Boolean> eliminated,
     java.util.Map<Long,Boolean> pending,
-    java.util.Map<Long,Boolean> away) {
+    java.util.Map<Long,Boolean> away,
+    java.util.Map<Long,Boolean> spectators ) {
+
     Common.UserListPayload up = new Common.UserListPayload();
     up.setPayloadType(Common.PayloadType.USER_LIST);
     up.setClientId(getClientId());
@@ -235,6 +237,7 @@ public class ServerThread extends BaseServerThread {
     up.setEliminated(eliminated);
     up.setPending(pending);
     if (away != null) up.setAway(away);
+    if (spectators != null) up.setSpectators(spectators);
     send(up);
     }
 

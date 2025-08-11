@@ -42,8 +42,8 @@ public class GamePanel extends JPanel {
         );
         awayBtn.addActionListener(e -> {
             boolean nowAway = Client.INSTANCE.uiAmAway();
-            Client.INSTANCE.uiToggleAway();                 // send to server
-            awayBtn.setText(nowAway ? "Set Away" : "I'm Back"); // optimistic flip
+            Client.INSTANCE.uiToggleAway();                 
+            awayBtn.setText(nowAway ? "Set Away" : "I'm Back"); 
         });
         split.setResizeWeight(0.45);
         add(split, BorderLayout.CENTER);
@@ -51,5 +51,11 @@ public class GamePanel extends JPanel {
         add(pickBar, BorderLayout.SOUTH); // ← add this line
     
         backBtn.addActionListener(e -> onBack.run());
+
+        javax.swing.Timer t = new javax.swing.Timer(500, e -> {
+            boolean spec = Client.INSTANCE.uiAmSpectator();
+            pickBar.setEnabled(!spec);
+        });
+        t.start();
     }
 }

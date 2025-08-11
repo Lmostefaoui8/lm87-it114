@@ -20,6 +20,7 @@ public class UserListPanel extends JPanel {
     private final JPanel listPanel = new JPanel();
     private final JLabel title = new JLabel("Players");
 
+
     public UserListPanel() {
         setLayout(new BorderLayout(8,8));
         setBorder(new EmptyBorder(8,8,8,8));
@@ -32,17 +33,26 @@ public class UserListPanel extends JPanel {
 
         // small timer to refresh from client snapshot
         new javax.swing.Timer(500, e -> refresh()).start();
+
+        
+     
+
         refresh();
     }
 
+    private static <K,V> Map<K,V> safeMap(Map<K,V> in) {
+        return (in == null) ? new LinkedHashMap<>() : in;
+    }
+
     public void refresh() {
-        Map<Long, User> users = Client.INSTANCE.uiGetKnownClientsSnapshot();
-        Map<Long, Integer> points = Client.INSTANCE.uiGetPointsSnapshot();
-        Map<Long, Boolean> pending = Client.INSTANCE.uiGetPendingSnapshot();
-        Map<Long, Boolean> eliminated = Client.INSTANCE.uiGetEliminatedSnapshot();
-        Map<Long, Boolean> away = Client.INSTANCE.uiGetAwaySnapshot();
+        // Snapshots
+        Map<Long, User> users      = safeMap(Client.INSTANCE.uiGetKnownClientsSnapshot());
+        Map<Long, Integer> points  = safeMap(Client.INSTANCE.uiGetPointsSnapshot());
+        Map<Long, Boolean> pending = safeMap(Client.INSTANCE.uiGetPendingSnapshot());
+        Map<Long, Boolean> eliminated = safeMap(Client.INSTANCE.uiGetEliminatedSnapshot());
+        Map<Long, Boolean> away    = safeMap(Client.INSTANCE.uiGetAwaySnapshot());
 
-
+        // Sort users
         List<User> list = new ArrayList<>(users.values());
         list.sort((a,b) -> {
             int pa = points.getOrDefault(a.getClientId(), 0);
@@ -55,34 +65,39 @@ public class UserListPanel extends JPanel {
             return Long.compare(a.getClientId(), b.getClientId());
         });
 
+        // Rebuild UI
         listPanel.removeAll();
         for (User u : list) {
             long id = u.getClientId();
-            boolean isElim = eliminated.getOrDefault(id, false);
+            boolean isElim    = eliminated.getOrDefault(id, false);
             boolean isPending = pending.getOrDefault(id, false);
-            int pts = points.getOrDefault(id, 0);
-            boolean isAway = away.getOrDefault(id,false);
-            listPanel.add(row(u, pts, isPending, isElim,isAway));
+            int pts           = points.getOrDefault(id, 0);
+            boolean isAway    = away.getOrDefault(id, false);
+            boolean isSpectator = Client.INSTANCE.uiIsSpectator(id);
+
+            listPanel.add(row(u, pts, isPending, isElim, isAway, isSpectator));
         }
         listPanel.revalidate();
         listPanel.repaint();
-    }
-
-    private JPanel row(User u, int pts, boolean pending, boolean eliminated, boolean isAway) {
+    }    private JPanel row(User u, int pts, boolean pending, boolean eliminated, boolean isAway, boolean isSpectator) {
         JPanel p = new JPanel(new BorderLayout(8,0));
         p.setMaximumSize(new Dimension(Integer.MAX_VALUE, 28));
 
         String name = (u.getClientName() != null ? u.getClientName() : "-") + " #" + u.getClientId();
 
         JLabel left = new JLabel(name);
-        JLabel mid  = new JLabel("• " + (isAway ? "AWAY"
-                  : (pending ? "PICKING…"
-                  : (eliminated ? "ELIMINATED" : "READY/IDLE"))));
-
+        JLabel mid;
+        if (isSpectator) {
+            mid = new JLabel("• SPECTATOR");
+        } else {
+            mid = new JLabel("• " + (isAway ? "AWAY"
+                            : (pending ? "PICKING…"
+                            : (eliminated ? "ELIMINATED" : "READY/IDLE"))));
+        }
         JLabel right = new JLabel(pts + " pts");
 
         // visual styling
-        if(isAway ||eliminated) {
+        if (isSpectator || isAway || eliminated) {
             Color gray = new Color(130,130,130);
             left.setForeground(gray);
             mid.setForeground(gray);
