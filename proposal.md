@@ -1,5 +1,5 @@
 ## Project Name: Rock Paper Scissor Game
-### Project Summary: (Copy from proposal)
+### Project Summary: Group RPS (2+ players). Battles are compared clockwise (A -> B, B -> C, C -> A), you determine if elimination occurs during attack (ex. A -> B) or defense (ex. C -> A). Points will be tracked for wins, but session ends with “last person standing”.
 ### Github Link: https://github.com/Lmostefaoui8/lm87-it114
 ### Your Name: Lamia Mostefaoui
 ### Course/Section: IT114 
